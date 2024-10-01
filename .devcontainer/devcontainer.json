@@ -1,0 +1,19 @@
+{
+    "name": "glideskies-grib",
+    "dockerFile": "../Dockerfile",
+    "context": "../",
+    "customizations": {
+        "vscode": {
+            "settings": {
+               "python.pythonPath": "/usr/local/bin/python"
+            },
+            "extensions": [
+                "ms-python.python"
+            ]
+        }
+    },
+    "mounts": [
+      "source=${localWorkspaceFolder}/app,target=/app,type=bind"
+    ],
+    "postCreateCommand": "pip install --no-cache-dir -r requirements.txt"
+  }
