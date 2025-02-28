@@ -1,10 +1,10 @@
 version: '3'
 services:
   app:
-    image: glideskies-grib
+    image: glideskies-gdal
     build:
       context: .
     volumes:
       - ./app:/app
-    container_name: glideskies.grib-downloader
-    command: python main.py
+    container_name: glideskies.grib-gdal
+    command: python3 main.py

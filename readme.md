@@ -1,5 +1,7 @@
 # grib downloader for arome model
 
+/!\ WIP + Currently rebuilding the project /!\
+
 this should allow you to:
 
 - download arome grib

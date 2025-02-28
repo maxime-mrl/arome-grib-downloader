@@ -1,5 +1,5 @@
 {
-    "name": "glideskies-grib",
+    "name": "XCast-GRIB-GDAL",
     "dockerFile": "../Dockerfile",
     "context": "../",
     "customizations": {
@@ -14,6 +14,5 @@
     },
     "mounts": [
       "source=${localWorkspaceFolder}/app,target=/app,type=bind"
-    ],
-    "postCreateCommand": "pip install --no-cache-dir -r requirements.txt"
+    ]
   }
