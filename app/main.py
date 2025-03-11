@@ -64,4 +64,4 @@ def grib_to_cog(input_grib, output_dir):
     ds = None
 
 # Example usage
-grib_to_cog("arome_ip1.grib2", "out")
+grib_to_cog("data/icon-d2_germany_t_2m_000_2d.grib2", "out/icon")

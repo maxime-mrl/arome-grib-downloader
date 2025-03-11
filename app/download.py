@@ -19,7 +19,7 @@ def get_latest_run_timestamp(delay=4):
     run_time = datetime.datetime(utc_now.year, utc_now.month, utc_now.day, latest_run_hour)
     return run_time.isoformat()
 
-run_time = get_latest_run_timestamp() + "Z" # Z at the ends of arome time idk what this is must mean something, will research soontm
+run_time = get_latest_run_timestamp()
 
 def download_gribs(package, time_ranges=[]):
     # check function inputs
@@ -29,7 +29,7 @@ def download_gribs(package, time_ranges=[]):
     files = []
     # sequentially download gribs for all time ranges wanted
     for time_range in time_ranges:
-        url = f'https://object.data.gouv.fr/meteofrance-pnt/pnt/{run_time}/arome/0025/{package}/arome__0025__{package}__{time_range}__{run_time}.grib2'
+        url = f'https://object.data.gouv.fr/meteofrance-pnt/pnt/{run_time}Z/arome/0025/{package}/arome__0025__{package}__{time_range}__{run_time}Z.grib2'
         file_path = os.path.join(os.getcwd(), "data", f'arome__0025__{package}__{time_range}__{run_time}.grib2')  # set download path to [PROJECT]/data/filename.grib2
         cmd = f'wget --output-document {file_path} {url}'
         files.append(file_path) # keep track of the downloaded files
