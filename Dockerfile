@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y \
     python3 \
     python3-pip \
     python3-dev \
+    git \
     && apt-get clean
 
 # Add UbuntuGIS repository and key
