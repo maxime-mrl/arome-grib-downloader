@@ -34,6 +34,7 @@ class Downloader:
         self.steps = steps
         self.packages = packages
         self.extra_str_params = self._parse_kwargs(**extra_str_params)
+        self.files = []
 
     def _parse_kwargs(self, **kwargs: Union[str, List[str]]) -> List[Dict[str, str]]:
         """
@@ -131,6 +132,7 @@ class Downloader:
         for url in urls:
             file_name = os.path.basename(url)
             file_path = os.path.join(output_dir, file_name)
+            self.files.append(file_path)
             print(f"Downloading {file_name} from {url} to {file_path}")
             subprocess.call(f'wget --output-document {file_path} {url}', shell=True)
             
@@ -144,8 +146,54 @@ class Downloader:
                     for chunk in iter(lambda: compressed_file.read(1024 * 1024), b''):
                         decompressed_file.write(chunk)
 
-                # os.remove(file_path)  # Remove the compressed file after successful decompression
+                os.remove(file_path)  # Remove the compressed file after successful decompression
                 print(f"Decompressed and saved: {grib_file_path}")
+            
+            if len(self.files) > 0:
+                self.merge_datasets(self.files, os.path.join(output_dir, f"RUN_{run_time}_combined.grib2"))
+
+    def get_grib_records(self, file_path):
+      """Extracts record metadata from a GRIB2 file using wgrib2."""
+      cmd = ["wgrib2", file_path, "-match", ".", "-s"]
+      result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+      records = set()
+      
+      for line in result.stdout.split("\n"):
+          if line.strip():
+              parts = line.split(":")
+              key = ":".join(parts[3:6])  # Keep variable, level, and time info
+              records.add(key)
+      return records
+
+    def merge_datasets(self, input_files: List[str], output_file: str) -> None:
+      print("Merging datasets...")
+      """
+      Combine multiple GRIB files with optional deduplication
+      
+      Parameters:
+      - input_files: List of paths to input GRIB files
+      - output_file: Path to output combined GRIB file
+      - remove_duplicates: Whether to remove duplicate records
+      """
+      # First concatenate grib keys
+      seen_records = set()
+    
+      for i, file in enumerate(input_files):
+          print(f"Processing {file} ({i+1}/{len(input_files)})...")
+          current_records = self.get_grib_records(file)
+          
+          new_records = current_records - seen_records
+          seen_records.update(new_records)
+
+          if i == 0:
+              # First file, copy as base
+              subprocess.run(["cp", file, output_file], check=True)
+          else:
+              # Append only non-duplicate records
+              cmd = ["wgrib2", file, "-match", "|".join(new_records), "-grib", output_file, "-append"]
+              subprocess.run(cmd, check=True)
+
+      print(f"Merged file saved as: {output_file}")
 
 # TESTING DA SHIT
 if __name__ == "__main__":
@@ -168,8 +216,16 @@ if __name__ == "__main__":
     )
   arome_urls = arome_downloader.construct_urls()
   icon_urls = icon_downloader.construct_urls()
-  icon_downloader.download()
-  arome_downloader.download()
+  # icon_downloader.download()
+  # arome_downloader.download()
+
+  arome_downloader.merge_datasets(
+      [
+        "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2",
+        "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z_c.grib2",
+      ],
+      "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome_combined.grib2"
+  )
   # for url in arome_urls:
   #   print(url)
   # for url in icon_urls:

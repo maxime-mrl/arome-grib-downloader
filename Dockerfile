@@ -11,6 +11,17 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
     git \
+    # Add dependencies for wgrib2
+    gcc \
+    make \
+    gfortran \
+    cmake \
+    #
+    libnetcdf-dev \
+    libpng-dev \
+    zlib1g-dev \
+    libopenjp2-7-dev \
+    #
     && apt-get clean
 
 # Add UbuntuGIS repository and key
@@ -28,6 +39,20 @@ RUN rm -rf /var/lib/apt/lists/* \
 # Set environment variables for GDAL
 ENV CPLUS_INCLUDE_PATH=/usr/include/gdal
 ENV C_INCLUDE_PATH=/usr/include/gdal
+
+# Download and build wgrib2 with USE_IPOLATES=1 and a patch for Fortran compilation
+ENV FC=gfortran
+ENV CC=gcc
+RUN cd /tmp && \
+    wget https://ftp.cpc.ncep.noaa.gov/wd51we/wgrib2/wgrib2.tgz && \
+    tar -xzf wgrib2.tgz && \
+    cd grib2 && \
+    sed -i 's/USE_IPOLATES=0/USE_IPOLATES=1/' makefile && \
+    make && \
+    cp wgrib2/wgrib2 /usr/local/bin/ && \
+    chmod +x /usr/local/bin/wgrib2 && \
+    cd /tmp && \
+    rm -rf grib2 wgrib2.tgz
 
 # Create working directory
 WORKDIR /app
