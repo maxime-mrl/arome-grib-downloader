@@ -152,16 +152,20 @@ class Downloader:
             if len(self.files) > 0:
                 self.merge_datasets(self.files, os.path.join(output_dir, f"RUN_{run_time}_combined.grib2"))
 
-    def get_grib_records(self, file_path):
+    def get_grib_records_signature(self, file_path):
       """Extracts record metadata from a GRIB2 file using wgrib2."""
-      cmd = ["wgrib2", file_path, "-match", ".", "-s"]
-      result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+      result = subprocess.run(
+              ["wgrib2", file_path, "-s"],
+              capture_output=True, 
+              text=True, 
+              check=True
+            )
       records = set()
       
       for line in result.stdout.split("\n"):
           if line.strip():
               parts = line.split(":")
-              key = ":".join(parts[3:6])  # Keep variable, level, and time info
+              key = ":".join(parts[2:6])  # Keep variable, level, and time info
               records.add(key)
       return records
 
@@ -173,26 +177,39 @@ class Downloader:
       Parameters:
       - input_files: List of paths to input GRIB files
       - output_file: Path to output combined GRIB file
-      - remove_duplicates: Whether to remove duplicate records
       """
-      # First concatenate grib keys
-      seen_records = set()
+      out_dir = os.path.dirname(output_file)
+      os.makedirs(out_dir, exist_ok=True)
+      # Create a file to store the records
+      records_file = os.path.join(out_dir, "inventory.txt")
     
       for i, file in enumerate(input_files):
           print(f"Processing {file} ({i+1}/{len(input_files)})...")
-          current_records = self.get_grib_records(file)
-          
-          new_records = current_records - seen_records
-          seen_records.update(new_records)
-
-          if i == 0:
-              # First file, copy as base
-              subprocess.run(["cp", file, output_file], check=True)
+          if (i == 0):
+            # First file, just copy it
+            subprocess.run(
+                f"cp {file} {output_file}",
+                shell=True,
+                check=True
+            )
           else:
-              # Append only non-duplicate records
-              cmd = ["wgrib2", file, "-match", "|".join(new_records), "-grib", output_file, "-append"]
-              subprocess.run(cmd, check=True)
-
+              # Subsequent files, append only new records
+              # wgrib2 file2.grib2 -not_if inventory1.txt -append -grib merged.grib2
+              subprocess.run(
+                f"wgrib2 {file} -not_if {records_file} -append -grib {output_file}",
+                shell=True,
+                check=True
+              )
+          # Update the records file
+          f = open(records_file, "w")
+          f.write("\n".join(self.get_grib_records_signature(output_file)))
+          f.close()
+      # Clean up the records file
+      # subprocess.run(
+      #   f"rm {records_file}",
+      #   shell=True,
+      #   check=True
+      # )
       print(f"Merged file saved as: {output_file}")
 
 # TESTING DA SHIT
@@ -219,13 +236,28 @@ if __name__ == "__main__":
   # icon_downloader.download()
   # arome_downloader.download()
 
-  arome_downloader.merge_datasets(
-      [
-        "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2",
-        "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z_c.grib2",
-      ],
-      "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome_combined.grib2"
-  )
+  # arome_downloader.merge_datasets(
+  #     [
+  #       "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2",
+  #       "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z_c.grib2",
+  #     ],
+  #     "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome_duplicate_combined.grib2"
+  # )
+
+  
+  f = open("test2.txt", "w")
+  f.write("\n".join(arome_downloader.get_grib_records_signature("/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2")))
+  f.close()
+
+
+  # icon_downloader.merge_datasets(
+  #     [
+  #       "/workspaces/gdal/app/data/downloads/RUN_2025032009/file1.grib2",
+  #       "/workspaces/gdal/app/data/downloads/RUN_2025032009/file2.grib2",
+  #       # "/workspaces/gdal/app/data/downloads/RUN_2025032009/icon-d2_germany_icosahedral_model-level_2025032009_001_2_t.grib2",
+  #     ],
+  #     "/workspaces/gdal/app/data/downloads/RUN_2025032009/arome_combined.grib2"
+  # )
   # for url in arome_urls:
   #   print(url)
   # for url in icon_urls:
