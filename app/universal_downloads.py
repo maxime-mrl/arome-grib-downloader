@@ -12,8 +12,9 @@ class Downloader:
         update_times: List[int],
         steps: List[Any],
         packages: List[Any],
-        safe_timeout: int = 1,
-        date_format: str = "%Y%m%d%H",
+        safe_timeout: Optional[int] = 1,
+        date_format: Optional[str] = "%Y%m%d%H",
+        special_urls: Optional[List[str]] = [],
         **extra_str_params: Union[str, List[str]]
     ) -> None:
         """
@@ -25,9 +26,11 @@ class Downloader:
         :param packages: Forecast packages.
         :param safe_timeout: Number of hours to wait before the next run is available.
         :param date_format: Format for the run time date.
+        :param special_urls: any URL template with different format, template will be formated the same way as url_template.
         :param extra_str_params: Additional string parameters for URL formatting.
         """
         self.url_template = url_template
+        self.special_urls = special_urls
         self.update_times = update_times
         self.safe_timeout = safe_timeout
         self.date_format = date_format
@@ -103,6 +106,7 @@ class Downloader:
         urls = []
 
         # Loop through packages, steps, and extra parameters to build each URL
+        print(self.extra_str_params)
         for package in self.packages:
             for step in self.steps:
                 for extra_params in self.extra_str_params:
@@ -113,7 +117,19 @@ class Downloader:
                         package=package,
                         **extra_params
                     )
-                    urls.append(url)
+                    # additionally add any special URLs with required parameters
+                    for special_url in self.special_urls:
+                      additional_url = special_url.format(
+                        run_hour=run_hour,
+                        run_time=run_time,
+                        step=step,
+                        package=package,
+                        **extra_params
+                      )
+                      if additional_url not in urls:
+                        urls.append(additional_url)
+                    if url not in urls:
+                      urls.append(url)
         return urls
 
     def download(self, output_dir: Optional[str] = None) -> None:
@@ -229,10 +245,15 @@ if __name__ == "__main__":
     packages=[ 't' ],
     safe_timeout=1,
     date_format="%Y%m%d%H",
-    levels=[ 1, 2 ]
+    special_urls=[
+      'https://opendata.dwd.de/weather/nwp/icon-d2/grib/{run_hour}/{invariant_params}/icon-d2_germany_icosahedral_time-invariant_{run_time}_000_0_clat.grib2.bz2'
+    ],
+    levels=[ 1, 2 ],
+    invariant_params=[ 'clat', 'clon' ]
     )
   arome_urls = arome_downloader.construct_urls()
   icon_urls = icon_downloader.construct_urls()
+  print(icon_urls)
   # icon_downloader.download()
   # arome_downloader.download()
 
@@ -245,9 +266,9 @@ if __name__ == "__main__":
   # )
 
   
-  f = open("test2.txt", "w")
-  f.write("\n".join(arome_downloader.get_grib_records_signature("/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2")))
-  f.close()
+  # f = open("test2.txt", "w")
+  # f.write("\n".join(arome_downloader.get_grib_records_signature("/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2")))
+  # f.close()
 
 
   # icon_downloader.merge_datasets(
