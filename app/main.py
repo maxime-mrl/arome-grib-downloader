@@ -1,68 +1,65 @@
-from osgeo import gdal
-import os
-import gc
+from typing import Optional, List
 
-def grib_to_cog(input_grib, output_dir):
-  # Create output directory if it does not exist
-  if not os.path.exists(output_dir):
-    os.makedirs(output_dir)
+class grib_tools:
+  def __init__(
+    self,
+    name: str,
+    output_dir: Optional[str]=None,
+    output_formats: Optional[List[str]]=[],
+    parameters: Optional[List[str]]=[],
+  ):
+    self.name = name
+  
+  def grib_to_cog(
+    self,
+    input_grib: str,
+    output_dir: str,
+  ):
+    """
+    Convert GRIB file to Cloud Optimized GeoTIFF (COG)
+    @param input_grib: Path to input GRIB file
+    @param output_dir: Path to output directory
+    """
+    pass
 
-  # gdal configuration
-  gdal.SetCacheMax(250)
-  gdal.UseExceptions()
-
-  try:
-    # open grib file
-    ds = gdal.Open(input_grib)
-    if ds is None:
-      raise Exception(f"Could not open {input_grib}")
+  def regrid(
+    self,
+    grib_file: str,
+    resolution: Optional[float]=0.1,
+    output_file: Optional[str]=None,
+  ):
+    """
+    Handle reprojection of specials grids (mainly ICON) to regular latlon grid
+    @param grib_file: Path to input GRIB file
+    @param resolution: Target resolution in degrees (icon-d2 ~ 0.02, icon-eu ~ 0.0625, and icon-global ~ 0.125) default to 0.1
+    @param output_file: Path to output reprojected GRIB file
     
-    print(f"Processing {input_grib}...")
+    @raise AssertionError: If input file does not exist
+    @raise Exception: If wgrib2 command fails
+    @return: Path to reprojected GRIB file
+    """
+    pass
 
-    # Get band information
-    info = gdal.Info(ds, format='json')
-    bands = info['bands']
-    total_bands = len(bands)
-    
-    print(f"Total bands: {total_bands}")
-    
-    for band_idx, band_info in enumerate(bands, 1):
-      try:
-        # Direct band access
-        band = ds.GetRasterBand(band_idx)
-        if band is None:
-          raise Exception(f"Could not access band {band_idx}")
-        
-        metadata = band_info['metadata']['']
-        var_name = metadata.get('GRIB_ELEMENT', f'band_{band_idx}')
-        level = metadata.get('GRIB_SHORT_NAME', '')
-        
-        output_file = f"{output_dir}/{var_name}_{level}_{band_idx}.tif"
-        print(f"\nProcessing band {band_idx}/{total_bands}")
-        print(f"Variable: {var_name}, Level: {level}")
-        
-        translate_options = gdal.TranslateOptions(
-          bandList=[band_idx],
-          creationOptions=[
-            "BIGTIFF=YES",
-            "COMPRESS=DEFLATE",
-            "TILED=YES",
-            "BLOCKXSIZE=256",
-            "BLOCKYSIZE=256",
-          ]
-        )
-        
-        gdal.Translate(output_file, ds, options=translate_options)
-            
-      except Exception as e:
-        print(f"Error processing band {band_idx}: {str(e)}")
-        continue
-      finally:
-        band = None
-        gc.collect()
-  finally:
-    ds = None
+  def grib_to_hdf(
+    self,
+    input_grib: str,
+    output_dir: str,
+  ):
+    """
+    Convert GRIB file to Hierarchical Data Format (HDF5)
+    @param input_grib: Path to input GRIB file
+    @param output_dir: Path to output directory
+    """
+    pass
+  
+  def get_band_metadata(
+    self,
+    metadata: dict,
+  ):
+    """
+    Extract band metadata with fallbacks for different providers.
+    @param metadata: Band metadata
+    @return: Extracted metadata
+    """
+    pass
 
-# Example usage
-grib_to_cog("data/downloads/RUN_2025032409/icon_reprojected_05.grib2", "out/icon5")
-# grib_to_cog("data/downloads/RUN_2025-03-13T06:00:00/arome__0025__HP1__00H06H__2025-03-13T06:00:00Z.grib2", "out/test/arome")

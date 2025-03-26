@@ -15,6 +15,7 @@ class Downloader:
     safe_timeout: Optional[int] = 1,
     date_format: Optional[str] = "%Y%m%d%H",
     special_urls: Optional[List[str]] = [],
+    name: Optional[str] = None,
     **extra_str_params: Union[str, List[str]]
   ) -> None:
     """
@@ -27,6 +28,7 @@ class Downloader:
     :param safe_timeout: Number of hours to wait before the next run is available.
     :param date_format: Format for the run time date.
     :param special_urls: any URL template with different format, template will be formated the same way as url_template.
+    :param name: Optional model name (used for default outputs).
     :param extra_str_params: Additional string parameters for URL formatting.
     """
     self.url_template = url_template
@@ -37,6 +39,7 @@ class Downloader:
     self.steps = steps
     self.packages = packages
     self.extra_str_params = self._parse_kwargs(**extra_str_params)
+    self.name = name
     self.files = []
 
   def _parse_kwargs(self, **kwargs: Union[str, List[str]]) -> List[Dict[str, str]]:
@@ -142,7 +145,12 @@ class Downloader:
     """
     run_time, _ = self.get_latest_run()
     if output_dir is None:
-      output_dir = os.path.join(os.getcwd(), "data", "downloads", f"RUN_{run_time}")
+      output_dir = os.path.join(
+        os.getcwd(),
+        "data",
+        "downloads"
+        f"{self.name if self.name else "RUN"}_{run_time}"
+      )
 
     os.makedirs(output_dir, exist_ok=True)
     urls = self.construct_urls()
@@ -160,7 +168,10 @@ class Downloader:
 
     # MERGE FILES      
     if len(self.files) > 0:
-      self.merge_datasets(self.files, os.path.join(output_dir, f"RUN_{run_time}_combined.grib2"))
+      self.merge_datasets(
+        self.files,
+        os.path.join(output_dir, f"{self.name if self.name else "RUN"}_{run_time}_combined.grib2")
+      )
     
   def decompress_bz2(self, file_path: str) -> str:
     """
