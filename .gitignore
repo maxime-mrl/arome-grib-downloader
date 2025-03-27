@@ -1,3 +1,4 @@
-**/data
-**/out
-**/temp/*
+data
+out
+temp
+__pycache__

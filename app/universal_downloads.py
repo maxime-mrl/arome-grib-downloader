@@ -16,10 +16,12 @@ class Downloader:
     date_format: Optional[str] = "%Y%m%d%H",
     special_urls: Optional[List[str]] = [],
     name: Optional[str] = None,
+    base_dir: Optional[str] = None,
     **extra_str_params: Union[str, List[str]]
   ) -> None:
     """
     Initializes the Downloader instance.
+    if you are using downloader for grib_tools, there is no need to provide name and base_dir.
     
     :param url_template: URL template with placeholders.
     :param update_times: List of update hours (e.g., [0, 6, 12, 18]).
@@ -29,6 +31,7 @@ class Downloader:
     :param date_format: Format for the run time date.
     :param special_urls: any URL template with different format, template will be formated the same way as url_template.
     :param name: Optional model name (used for default outputs).
+    :param base_dir: Optional base directory for downloads.
     :param extra_str_params: Additional string parameters for URL formatting.
     """
     self.url_template = url_template
@@ -38,8 +41,9 @@ class Downloader:
     self.date_format = date_format
     self.steps = steps
     self.packages = packages
-    self.extra_str_params = self._parse_kwargs(**extra_str_params)
     self.name = name
+    self.base_dir = base_dir
+    self.extra_str_params = self._parse_kwargs(**extra_str_params)
     self.files = []
 
   def _parse_kwargs(self, **kwargs: Union[str, List[str]]) -> List[Dict[str, str]]:
@@ -137,21 +141,26 @@ class Downloader:
             urls.append(url)
     return urls
 
-  def download(self, output_dir: Optional[str] = None) -> None:
+  def download(self, output_dir: Optional[str] = None, no_exist: Optional[bool] = False) -> bool:
     """
     Downloads files from constructed URLs and saves them to the output directory.
     
     :param output_dir: Optional directory to save downloads. If not provided, directory will be ./data/downloads/RUN_{run_time}.
+    :param no_exist: Optional flag to skip downloading if the output directory already exists.
+
+    :return: True if it downloaded anything, False otherwise.
     """
     run_time, _ = self.get_latest_run()
     if output_dir is None:
+      base_dir = self.base_dir if self.base_dir else os.path.join(os.getcwd(), "data", "downloads")
       output_dir = os.path.join(
-        os.getcwd(),
-        "data",
-        "downloads"
-        f"{self.name if self.name else "RUN"}_{run_time}"
+        base_dir,
+        f"{(self.name if self.name else 'RUN')}_{run_time}"
       )
 
+    if no_exist and os.path.exists(output_dir):
+      print(f"Skipping download for {run_time} as directory already exists: {output_dir}")
+      return False
     os.makedirs(output_dir, exist_ok=True)
     urls = self.construct_urls()
 
@@ -163,15 +172,19 @@ class Downloader:
       
       # HANDLE DECOMPRESSION
       if file_name.endswith('.bz2'):
-        file_name = self.decompress_bz2(file_path)
-      self.files.append(os.path.join(output_dir, file_name))
-
+        file_path = self.decompress_bz2(file_path)
+      self.files.append(file_path)
     # MERGE FILES      
     if len(self.files) > 0:
+      merged_output = os.path.join(output_dir, f"{(self.name if self.name else 'RUN')}_{run_time}_combined.grib2")
       self.merge_datasets(
         self.files,
-        os.path.join(output_dir, f"{self.name if self.name else "RUN"}_{run_time}_combined.grib2")
+        merged_output
       )
+      self.files = [
+        merged_output
+      ]
+    return True
     
   def decompress_bz2(self, file_path: str) -> str:
     """
@@ -249,6 +262,12 @@ class Downloader:
       f = open(records_file, "w")
       f.write("\n".join(self.get_grib_records_signature(output_file)))
       f.close()
+      # remove the file
+      subprocess.run(
+        f"rm {file}",
+        shell=True,
+        check=True,
+      )
     # Clean up the records file
     subprocess.run(
       f"rm {records_file}",
