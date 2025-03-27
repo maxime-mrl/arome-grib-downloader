@@ -19,9 +19,9 @@ class GribTools:
     name: str,
     downloader: Downloader,
     output_dir: Optional[str]=None,
-    output_formats: Optional[List[str]]=[],
-    parameters: Optional[List[str]]=[],
-    levels: Optional[List[str]]=[],
+    output_formats: Optional[List[str]]=["cog", "hdf"],
+    parameters: Optional[List[str]]=["all"],
+    levels: Optional[List[str]]=["all"],
     resolution: Optional[float]=1,
   ):
     """
@@ -201,7 +201,7 @@ class GribTools:
       finally:
         band = None
         gc.collect()
-      ds = None
+    ds = None
 
   def grib_to_hdf(
     self,
@@ -226,7 +226,7 @@ class GribTools:
 
 
     # Create HDF5 file
-    with h5py.File(os.path.join(output_dir, f"{name}.h5"), "w") as hdf5_file:
+    with h5py.File(os.path.join(output_dir, f"{self.name}.h5"), "w") as hdf5_file:
       # Loop through each band
       for band_idx, band_info in enumerate(bands, 1):
         try:
@@ -306,4 +306,21 @@ if __name__ == "__main__":
     parameters=[ "TMP" ],
     levels=[ "2m", "10m" ]
   )
-  icon.download_and_process()
+  # icon.download_and_process()
+
+  arome_downloader = Downloader(
+    url_template='https://object.data.gouv.fr/meteofrance-pnt/pnt/{run_time}Z/arome/0025/{package}/arome__0025__{package}__{step}__{run_time}Z.grib2',
+    update_times=[ 0, 3, 6, 12, 18 ],
+    steps=[ '00H06H' ],
+    packages=[ 'HP1' ],
+    safe_timeout=6,
+    date_format="iso"
+  )
+  arome = GribTools(
+    name="arome",
+    downloader=arome_downloader,
+    output_formats=[ "cog", "hdf" ],
+    parameters=[ "TMP" ],
+    levels=[ "all" ]
+  )
+  arome.download_and_process()
