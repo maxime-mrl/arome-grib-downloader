@@ -11,7 +11,7 @@ currently tested with.
 - Arome 025 (Meteo France) grib2 files
 - icon-d2 (DWD) grib2 files
 
-Should work without problems with:
+Should work without problems for:
 - other Arome models
 - other icon models
 - Aladin (chmi)
@@ -31,13 +31,13 @@ Usage with docker (and devcontainer) is highly recommended.
  - `universal_downloads` to download the grib2 files
  - `helpers` preconfig for arome and icon-d2 models
 
-PS. I know it is not really detailed. Since it's a work in progress, it work for now.
+PS. I know it is not really detailed. will improve that SoonTM
 
 ## Usefuls links:
 
 ### data source:
 
-https://meteo.data.gouv.fr
-https://opendata.dwd.de/weather/nwp/
-https://opendata.chmi.cz/meteorology/weather/nwp_aladin/
+- https://meteo.data.gouv.fr
+- https://opendata.dwd.de/weather/nwp/
+- https://opendata.chmi.cz/meteorology/weather/nwp_aladin/
 
