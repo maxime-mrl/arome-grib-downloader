@@ -1,29 +1,43 @@
-# grib downloader for arome model
+# grib downloader for multiple models
 
-/!\ WIP + Currently rebuilding the project /!\
+/!\ WIP /!\
 
 this should allow you to:
 
-- download arome grib
-- convert to image or json
+- download some grib2 files
+- convert them to COG or HDF5
 
-this may allow you to download grib from others sources if the system is similar
+currently tested with.
+- Arome 025 (Meteo France) grib2 files
+- icon-d2 (DWD) grib2 files
 
-This is very much a work in progress composed of messy and buggy code.
-however I will not (or almost not) touch it till at least february.
+Should work without problems with:
+- other Arome models
+- other icon models
+- Aladin (chmi)
+
+Untested for the rest (Work in progress!)
 
 If you find some use of it... Enjoy!
 
+## Usage
+
+Usage with docker (and devcontainer) is highly recommended.
+
+1. Clone the repo
+2. Build the docker image (or use the devcontainer)
+3. Use in the container at your convenience:
+ - `grib_tools` to process the grib2 files
+ - `universal_downloads` to download the grib2 files
+ - `helpers` preconfig for arome and icon-d2 models
+
+PS. I know it is not really detailed. Since it's a work in progress, it work for now.
+
 ## Usefuls links:
 
-### Arome data source:
+### data source:
 
-https://meteo.data.gouv.fr/datasets/65bd12d7bfd26e26804204cb
+https://meteo.data.gouv.fr
+https://opendata.dwd.de/weather/nwp/
+https://opendata.chmi.cz/meteorology/weather/nwp_aladin/
 
-### base tuto
-
-https://wwww.architecture-performance.fr/ap_blog/fetching-arome-weather-forecasts-and-plotting-temperatures
-
-### Pygrib doc
-
-https://jswhit.github.io/pygrib/api.html
