@@ -4,7 +4,7 @@ import gc
 from osgeo import gdal
 import h5py
 from universal_downloads import Downloader
-from typing import Optional, List, TypedDict
+from typing import Optional, List, TypedDict, Iterable
 
 class BandMetadata(TypedDict):
   element: str
@@ -43,6 +43,7 @@ class GribTools:
     self.parameters = parameters
     self.levels = levels
     self.resolution = resolution
+    self.GP_band = None
 
     # update downloader class to fit what we want
     self.downloader.base_dir = os.path.join(self.output_dir, "downloads")
@@ -75,6 +76,8 @@ class GribTools:
       print("Could not open downloaded file trying to regrid...")
       file = self.regrid(file)
     # process the downloaded file
+    if ("list" in self.output_formats):
+      self.list_metadata(file)
     if ("cog" in self.output_formats):
       self.grib_to_cog(file, self.output_dir)
     if ("hdf" in self.output_formats):
@@ -103,6 +106,27 @@ class GribTools:
       'unit': metadata.get('GRIB_UNIT', 'unknown'),
       'center': metadata.get('GRIB_CENTER', 'unknown')
     }
+  
+  def select_band(
+    self,
+    bands: Iterable[any],
+    metadata: dict,
+  ) -> bool:
+    """
+    Select band based on metadata and wanted levels and variable
+    @param element: Element to select
+    @return: True if element is selected, False otherwise
+    """
+    safe_metadata = self.get_band_metadata(metadata)
+    name = safe_metadata['element']
+    level = safe_metadata['level']
+    # check if the band is wanted
+    if (
+      ("all" not in self.parameters and name not in self.parameters) or
+      (("all" not in self.levels and level not in self.levels))
+    ):
+      return False
+    return True
   
   def regrid(
     self,
@@ -140,6 +164,59 @@ class GribTools:
     print(f"Reprojection done : {output_file}")
     return output_file
 
+  def list_metadata(
+      self,
+      input_grib: str,
+      output_file: Optional[str]=None,
+  ):
+    """
+    List metadata of GRIB file and append them to a common file (used to debug)
+    @param input_grib: Path
+    @param output_file: Path to output file
+    """
+    if not output_file:
+      output_file = os.path.join(os.getcwd(), "data", "metadata_list.txt")
+
+    # Read existing metadata first
+    existing_metadata = []
+    if os.path.exists(output_file):
+      with open(output_file, "r") as f:
+        existing_metadata = f.read().split("\n")
+    
+    print(existing_metadata)
+
+    # open grib file
+    ds = gdal.Open(input_grib)
+    if ds is None:
+      raise Exception(f"Could not open {input_grib}")
+    
+    # Get band information
+    info = gdal.Info(ds, format='json')
+    bands = info['bands']
+
+    # Append new metadata
+    with open(output_file, "a") as f:
+      for band_idx, band_info in enumerate(bands, 1):
+        try:
+          # Extract metadata
+          metadata = band_info['metadata']['']
+          safe_metadata = self.get_band_metadata(metadata)
+          var_name = safe_metadata['element']
+          
+          # check if the band is already in the file
+          if var_name in existing_metadata:
+            print(f"Skipping {var_name}...")
+            continue
+            
+          existing_metadata.append(var_name)
+          f.write(f"{var_name}\n")
+        except Exception as e:
+          print(f"Error processing band {band_idx}: {str(e)}")
+          continue
+        finally:
+          band = None
+          gc.collect()
+
   def grib_to_cog(
     self,
     input_grib: str,
@@ -172,14 +249,15 @@ class GribTools:
         safe_metadata = self.get_band_metadata(metadata)
         var_name = metadata.get('GRIB_ELEMENT', f'band_{band_idx}')
         level = metadata.get('GRIB_SHORT_NAME', '')
-        # TODO more inteligent level checking (to take care of different levels representation (model-level, AGL, AMSL, ft, hpa, etc))
-        if (
-          (var_name not in self.parameters and "all" not in self.parameters) or
-          (level not in self.levels and "all" not in self.levels)):
+        if not self.select_band(bands, metadata):
           print(f"Skipping {var_name}_{level}...")
           continue
-        
-        output_file = f"{output_dir}/{var_name}_{level}_{band_idx}.tif"
+        time_dir = os.path.join(
+          output_dir,
+          safe_metadata['valid_time'].replace(":", "_").replace(" ", "_")
+        )
+        os.makedirs(time_dir, exist_ok=True)
+        output_file = f"{time_dir}/{var_name}_{level}.tif"
         print(f"\nProcessing band {var_name}_{level} at time {safe_metadata['valid_time']}")
         
         translate_options = gdal.TranslateOptions(
@@ -240,10 +318,7 @@ class GribTools:
           var_name = safe_metadata['element']
           units = safe_metadata['unit']
           level = safe_metadata['level']
-          # TODO more inteligent level checking (to take care of different levels representation (model-level, AGL, AMSL, ft, hpa, etc))
-          if (
-          (var_name not in self.parameters and "all" not in self.parameters) or
-          (level not in self.levels and "all" not in self.levels)):
+          if not self.select_band(bands, metadata):
             print(f"Skipping {var_name}_{level}...")
             continue
 
