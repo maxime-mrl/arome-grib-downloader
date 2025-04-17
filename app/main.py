@@ -6,9 +6,9 @@ import os
 
 arome_025 = arome_025_helper(
   steps=[ "00H06H" ],
-  packages=[ "SP3" ],
-  output_formats=[ "list" ],
-  parameters=[ "TMP" ],
+  packages=[ "HP1" ],
+  output_formats=[ "cog" ],
+  cog_parameters=[ "TMP" ],
   levels=[ "all" ]
 )
 

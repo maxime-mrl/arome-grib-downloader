@@ -1,10 +1,13 @@
 import os
 import subprocess
 import gc
+import re
+import datetime
 from osgeo import gdal
 import h5py
+from dateutil import parser
 from universal_downloads import Downloader
-from typing import Optional, List, TypedDict, Iterable
+from typing import Optional, List, TypedDict
 
 class BandMetadata(TypedDict):
   element: str
@@ -20,7 +23,8 @@ class GribTools:
     downloader: Downloader,
     output_dir: Optional[str]=None,
     output_formats: Optional[List[str]]=["cog", "hdf"],
-    parameters: Optional[List[str]]=["all"],
+    cog_parameters: Optional[List[str]]=["all"],
+    hdf_parameters: Optional[List[str]]=["all"],
     levels: Optional[List[str]]=["all"],
     resolution: Optional[float]=1,
   ):
@@ -40,10 +44,10 @@ class GribTools:
     self.downloader = downloader
     self.output_dir = output_dir if output_dir else os.path.join(os.getcwd(), "data", "out", name)
     self.output_formats = output_formats
-    self.parameters = parameters
+    self.cog_parameters = cog_parameters
+    self.hdf_parameters = hdf_parameters
     self.levels = levels
     self.resolution = resolution
-    self.GP_band = None
 
     # update downloader class to fit what we want
     self.downloader.base_dir = os.path.join(self.output_dir, "downloads")
@@ -93,40 +97,70 @@ class GribTools:
     @param metadata: Band metadata
     @return: Extracted metadata as dict with keys: element, level, valid_time, unit, center
     """
+    grib_element = (
+      metadata.get('GRIB_ELEMENT',  # Primary choice
+      metadata.get('PARAMETER',     # GRIB1 fallback
+      metadata.get('VARIABLE')))    # Generic fallback
+    )
+    grib_level = (
+      metadata.get('GRIB_SHORT_NAME',
+      metadata.get('LEVEL',
+      metadata.get('HEIGHT')))
+    )
+    grib_time = (
+      metadata.get('GRIB_VALID_TIME',  # Primary choice
+      metadata.get('VALIDTIME',
+      metadata.get('TIME')))
+    )
+    # normalize to ISO, handling epoch‐seconds vs free‑text
+    if grib_time:
+      dt = None
+      # pure digits → treat as epoch seconds
+      if re.fullmatch(r'\d+', grib_time):
+        try:
+          dt = datetime.datetime.fromtimestamp(int(grib_time), tz=datetime.timezone.utc)
+        except (OSError, OverflowError):
+          dt = None
+      else:
+        try:
+          dt = parser.parse(grib_time, fuzzy=True)
+        except (ValueError, OverflowError):
+          dt = None
+
+      if dt:
+        grib_time = dt.isoformat()
+      else:
+        # fallback or null out invalid times
+        grib_time = None
+
     return {
-      'element': metadata.get('GRIB_ELEMENT',  # Primary choice
-        metadata.get('PARAMETER',       # GRIB1 fallback
-        metadata.get('VARIABLE', 'unknown'))), # Generic fallback
-      'level': metadata.get('GRIB_SHORT_NAME',
-        metadata.get('LEVEL',
-        metadata.get('HEIGHT', 'unknown'))),
-      'valid_time': metadata.get('GRIB_VALID_TIME',
-        metadata.get('VALIDTIME', 
-        metadata.get('TIME', 'unknown'))),
+      'element': grib_element,
+      'level': grib_level,
+      'valid_time': grib_time,
       'unit': metadata.get('GRIB_UNIT', 'unknown'),
       'center': metadata.get('GRIB_CENTER', 'unknown')
     }
   
   def select_band(
     self,
-    bands: Iterable[any],
     metadata: dict,
+    parameters: List[str],
   ) -> bool:
     """
     Select band based on metadata and wanted levels and variable
     @param element: Element to select
-    @return: True if element is selected, False otherwise
+    @return: False or safe metadata
     """
     safe_metadata = self.get_band_metadata(metadata)
     name = safe_metadata['element']
     level = safe_metadata['level']
     # check if the band is wanted
     if (
-      ("all" not in self.parameters and name not in self.parameters) or
+      ("all" not in parameters and name not in parameters) or
       (("all" not in self.levels and level not in self.levels))
     ):
       return False
-    return True
+    return safe_metadata
   
   def regrid(
     self,
@@ -247,14 +281,13 @@ class GribTools:
         
         metadata = band_info['metadata']['']
         safe_metadata = self.get_band_metadata(metadata)
-        var_name = metadata.get('GRIB_ELEMENT', f'band_{band_idx}')
-        level = metadata.get('GRIB_SHORT_NAME', '')
-        if not self.select_band(bands, metadata):
-          print(f"Skipping {var_name}_{level}...")
-          continue
+        var_name = safe_metadata['element']
+        level = safe_metadata['level']
+        # check if the band is wanted
+        if not self.select_band(metadata, self.cog_parameters): continue
         time_dir = os.path.join(
           output_dir,
-          safe_metadata['valid_time'].replace(":", "_").replace(" ", "_")
+          safe_metadata['valid_time'].split(":")[0] + "_00Z"
         )
         os.makedirs(time_dir, exist_ok=True)
         output_file = f"{time_dir}/{var_name}_{level}.tif"
@@ -318,9 +351,8 @@ class GribTools:
           var_name = safe_metadata['element']
           units = safe_metadata['unit']
           level = safe_metadata['level']
-          if not self.select_band(bands, metadata):
-            print(f"Skipping {var_name}_{level}...")
-            continue
+        # check if the band is wanted
+          if not self.select_band(metadata, self.hdf_parameters): continue
 
           print(f"\nProcessing band {band_idx}/{len(bands)}")
           print(f"Variable: {var_name}, Level: {level}, Units: {units}")

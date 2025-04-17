@@ -1,15 +1,16 @@
 from universal_downloads import Downloader
 from grib_tools import GribTools
-from typing import List
+from typing import List, Optional
 import re
 
 def arome_025_helper(
   steps: List[str],
   packages: List[str],
-  output_dir: str = None,
-  output_formats: List[str] = None,
-  parameters: List[str] = None,
-  levels: List[str] = None,
+  output_dir: Optional[str] = None,
+  output_formats: Optional[List[str]] = None,
+  cog_parameters: Optional[List[str]] = None,
+  hdf_parameters: Optional[List[str]] = None,
+  levels: Optional[List[str]] = None,
 ) -> GribTools:
   """
   helper to use arome 0.025° model
@@ -44,7 +45,8 @@ def arome_025_helper(
     downloader=downloader,
     output_dir=output_dir,
     output_formats=output_formats,
-    parameters=parameters,
+    cog_parameters=cog_parameters,
+    hdf_parameters=hdf_parameters,
     levels=levels,
   )
   return arome_processor
@@ -53,10 +55,11 @@ def arome_025_helper(
 def arome_001_helper(
   steps: List[str],
   packages: List[str],
-  output_dir: str = None,
-  output_formats: List[str] = None,
-  parameters: List[str] = None,
-  levels: List[str] = None,
+  output_dir: Optional[str] = None,
+  output_formats: Optional[List[str]] = None,
+  cog_parameters: Optional[List[str]] = None,
+  hdf_parameters: Optional[List[str]] = None,
+  levels: Optional[List[str]] = None,
 ) -> GribTools:
   """
   helper to use arome 0.001° model
@@ -91,7 +94,8 @@ def arome_001_helper(
     downloader=downloader,
     output_dir=output_dir,
     output_formats=output_formats,
-    parameters=parameters,
+    cog_parameters=cog_parameters,
+    hdf_parameters=hdf_parameters,
     levels=levels,
   )
   return arome_processor
@@ -99,10 +103,11 @@ def arome_001_helper(
 def icon_d2_helper( # Not 100% working
   steps: List[str],
   packages: List[str],
-  output_dir: str = None,
-  output_formats: List[str] = None,
-  parameters: List[str] = None,
-  levels: List[str] = None,
+  output_dir: Optional[str] = None,
+  output_formats: Optional[List[str]] = None,
+  cog_parameters: Optional[List[str]] = None,
+  hdf_parameters: Optional[List[str]] = None,
+  levels: Optional[List[str]] = None,
 ) -> GribTools:
   for step in steps:
     assert re.match(r'^0[0-4][0-9]$', step), f"steps should follow 001, 002... (max 048), got {step}"
@@ -130,7 +135,8 @@ def icon_d2_helper( # Not 100% working
     downloader=downloader,
     output_dir=output_dir,
     output_formats=output_formats,
-    parameters=parameters,
+    cog_parameters=cog_parameters,
+    hdf_parameters=hdf_parameters,
     levels=levels,
     resolution=0.025,
   )
