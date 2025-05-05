@@ -48,7 +48,7 @@ class GribTools:
     self.hdf_parameters = hdf_parameters
     self.levels = levels
     self.resolution = resolution
-
+    print(self.hdf_parameters)
     # update downloader class to fit what we want
     self.downloader.base_dir = os.path.join(self.output_dir, "downloads")
     self.downloader.name = self.name
@@ -154,10 +154,12 @@ class GribTools:
     safe_metadata = self.get_band_metadata(metadata)
     name = safe_metadata['element']
     level = safe_metadata['level']
+    if not parameters:
+      raise ValueError("No parameters provided for selection")
     # check if the band is wanted
     if (
       ("all" not in parameters and name not in parameters) or
-      (("all" not in self.levels and level not in self.levels))
+      ("all" not in self.levels and level not in self.levels)
     ):
       return False
     return safe_metadata
@@ -351,7 +353,7 @@ class GribTools:
           var_name = safe_metadata['element']
           units = safe_metadata['unit']
           level = safe_metadata['level']
-        # check if the band is wanted
+          # check if the band is wanted
           if not self.select_band(metadata, self.hdf_parameters): continue
 
           print(f"\nProcessing band {band_idx}/{len(bands)}")

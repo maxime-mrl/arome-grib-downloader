@@ -7,10 +7,10 @@ def arome_025_helper(
   steps: List[str],
   packages: List[str],
   output_dir: Optional[str] = None,
-  output_formats: Optional[List[str]] = None,
-  cog_parameters: Optional[List[str]] = None,
-  hdf_parameters: Optional[List[str]] = None,
-  levels: Optional[List[str]] = None,
+  output_formats: Optional[List[str]] = ["cog", "hdf"],
+  cog_parameters: Optional[List[str]] = ["all"],
+  hdf_parameters: Optional[List[str]] = ["all"],
+  levels: Optional[List[str]] = ["all"],
 ) -> GribTools:
   """
   helper to use arome 0.025° model
@@ -56,10 +56,10 @@ def arome_001_helper(
   steps: List[str],
   packages: List[str],
   output_dir: Optional[str] = None,
-  output_formats: Optional[List[str]] = None,
-  cog_parameters: Optional[List[str]] = None,
-  hdf_parameters: Optional[List[str]] = None,
-  levels: Optional[List[str]] = None,
+  output_formats: Optional[List[str]] = ["cog", "hdf"],
+  cog_parameters: Optional[List[str]] = ["all"],
+  hdf_parameters: Optional[List[str]] = ["all"],
+  levels: Optional[List[str]] = ["all"],
 ) -> GribTools:
   """
   helper to use arome 0.001° model
@@ -104,10 +104,10 @@ def icon_d2_helper( # Not 100% working
   steps: List[str],
   packages: List[str],
   output_dir: Optional[str] = None,
-  output_formats: Optional[List[str]] = None,
-  cog_parameters: Optional[List[str]] = None,
-  hdf_parameters: Optional[List[str]] = None,
-  levels: Optional[List[str]] = None,
+  output_formats: Optional[List[str]] = ["cog", "hdf"],
+  cog_parameters: Optional[List[str]] = ["all"],
+  hdf_parameters: Optional[List[str]] = ["all"],
+  levels: Optional[List[str]] = ["all"],
 ) -> GribTools:
   for step in steps:
     assert re.match(r'^0[0-4][0-9]$', step), f"steps should follow 001, 002... (max 048), got {step}"

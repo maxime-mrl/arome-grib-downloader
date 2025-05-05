@@ -7,14 +7,32 @@ import os
 arome_025 = arome_025_helper(
   steps=[ "00H06H" ],
   packages=[ "HP1" ],
-  output_formats=[ "cog" ],
-  cog_parameters=[ "TMP" ],
-  levels=[ "all" ]
+  output_formats=[ "hdf" ],
 )
 
 
 
-arome_025.download_and_process()
+# arome_025.download_and_process()
+arome_025.grib_to_hdf(
+  "data/out/arome_025/downloads/arome_025_2025-04-28T03:00:00/arome_025_2025-04-28T03:00:00_combined.grib2",
+  "/app/data/out"
+)
 # print("PRES" in open(os.path.join(os.getcwd(), "data", "metadata_list.txt")).read().split("\n"))
 # with open(os.path.join(os.getcwd(), "data", "metadata_list.txt"), "rw") as f:
 #   print(f.read().split("\n"))
+
+# testing for aladin (not good rn)
+# aladin_downloader = Downloader(
+#     url_template='https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/{run_hour}/ALADLAMB4opendata_2025040500_CLPVEIND_MOD_XFU.grb.bz2',
+#     update_times=[ 0, 6, 12, 18 ],
+#     safe_timeout=4,
+#     date_format="%Y%m%d%H",
+#     invariant_params=[ 'clat', 'clon' ],
+#     levels=[ 1, 2 ], # should be user inputs but yeah..
+#     steps=steps,
+#     packages=packages,
+#   )
+
+# date = "2025-04-17T11_00_00+00_00"
+# date = date.split("_")[0] + "_00Z"
+# print(f"date: {date}")
