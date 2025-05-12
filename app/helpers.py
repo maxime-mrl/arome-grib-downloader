@@ -103,11 +103,12 @@ def arome_001_helper(
 def icon_d2_helper( # Not 100% working
   steps: List[str],
   packages: List[str],
+  levels: List[int],
   output_dir: Optional[str] = None,
   output_formats: Optional[List[str]] = ["cog", "hdf"],
   cog_parameters: Optional[List[str]] = ["all"],
   hdf_parameters: Optional[List[str]] = ["all"],
-  levels: Optional[List[str]] = ["all"],
+  output_resolution: Optional[float] = 0.025,
 ) -> GribTools:
   for step in steps:
     assert re.match(r'^0[0-4][0-9]$', step), f"steps should follow 001, 002... (max 048), got {step}"
@@ -125,7 +126,7 @@ def icon_d2_helper( # Not 100% working
       'https://opendata.dwd.de/weather/nwp/icon-d2/grib/{run_hour}/{invariant_params}/icon-d2_germany_icosahedral_time-invariant_{run_time}_000_0_{invariant_params}.grib2.bz2'
     ],
     invariant_params=[ 'clat', 'clon' ],
-    levels=[ 1, 2 ], # should be user inputs but yeah..
+    levels=levels,
     steps=steps,
     packages=packages,
   )
@@ -137,7 +138,7 @@ def icon_d2_helper( # Not 100% working
     output_formats=output_formats,
     cog_parameters=cog_parameters,
     hdf_parameters=hdf_parameters,
-    levels=levels,
-    resolution=0.025,
+    levels=["all"],
+    resolution=output_resolution,
   )
   return icon_processor

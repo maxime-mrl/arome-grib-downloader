@@ -1,5 +1,4 @@
 import os
-import subprocess
 import gc
 import re
 import datetime
@@ -7,7 +6,10 @@ from osgeo import gdal
 import h5py
 from dateutil import parser
 from universal_downloads import Downloader
-from typing import Optional, List, TypedDict
+from typing import Optional, List, TypedDict, Sequence
+import numpy as np
+import xarray as xr
+import xesmf as xe
 
 class BandMetadata(TypedDict):
   element: str
@@ -75,7 +77,12 @@ class GribTools:
       raise Exception("Downloaded file does not exist")
     print(f"Downloaded file: {file}")
     # check if we need to regrid the file
-    ds = gdal.Open(file)
+    ds = None
+    try:
+      # check if the file is a valid grib file
+      ds = gdal.Open(file)
+    except Exception as e:
+      print(f"Error opening file: {e}")
     if not ds:
       print("Could not open downloaded file trying to regrid...")
       file = self.regrid(file)
@@ -167,37 +174,72 @@ class GribTools:
   def regrid(
     self,
     grib_file: str,
-    resolution: Optional[float]=0.1,
-    output_file: Optional[str]=None,
-  ) -> str:
+    resolution: Optional[float] = 0.1,
+    output_file: Optional[str] = None,
+    method: Optional[str] = "bilinear",
+    area: Optional[Sequence[float]] = None,
+) -> str:
     """
-    Handle reprojection of specials grids (mainly ICON) to regular latlon grid
-    @param grib_file: Path to input GRIB file
-    @param resolution: Target resolution in degrees (icon-d2 ~ 0.02, icon-eu ~ 0.0625, and icon-global ~ 0.125) default to 0.1
-    @param output_file: Path to output reprojected GRIB file
-    
-    @raise AssertionError: If input file does not exist
-    @raise Exception: If wgrib2 command fails
-    @return: Path to reprojected GRIB file
+    Handle reprojection of special grids (mainly ICON) to regular lat/lon.
+
+    :param grib_file:   Path to input GRIB file
+    :param resolution:  Target grid spacing in degrees
+    :param output_file: Path to output reprojected GRIB file
+    :param method:      Interpolation method
+    :raises Exception: If input file cannot be read or regridding fails
+    :returns:          Path to the reprojected GRIB file
     """
-
-    assert os.path.exists(grib_file), f"File not found: {grib_file}"
-
-    if not output_file:
-      output_file = f"{os.path.splitext(grib_file)[0]}_reprojected.grib2"
-    
-    lon_points = int(360 / resolution) + 1
-    lat_points = int(180 / resolution) + 1
-
-    cmd = (
-      f'wgrib2 {grib_file}'
-      f' -if ":GEOLAT:" -set center 7 -set_var NLAT -fi'
-      f' -if ":GEOLON:" -set center 7 -set_var ELON -fi'
-      f' -grid_def -s -not_if "^(1|2):"  -lola 0:{lon_points}:{resolution} -90:{lat_points}:{resolution} {output_file} grib'
+    # Validate input file
+    if not os.path.isfile(grib_file):
+        raise FileNotFoundError(f"Input file not found: {grib_file}")
+    ds = xr.open_dataset(
+        grib_file,
+        engine="cfgrib",
+        backend_kwargs={"filter_by_keys": {"edition": 2}},
+        decode_cf=False,  # avoid erroneous auto coords
     )
+
+    print(ds.variables)
+    # 2) Ensure we have 'lat'/'lon' coords for xESMF
+    if "latitude" in ds.coords and "longitude" in ds.coords:
+        ds = ds.rename_coords(latitude="lat", longitude="lon")
+    # CLAT/CLON or tlat/tlon are 2D arrays of grid-point centers
+    elif "CLAT" in ds.variables and "CLON" in ds.variables:
+        ds = ds.assign_coords(lat = ds["CLAT"], lon = ds["CLON"])
+    elif "tlat" in ds.variables and "tlon" in ds.variables:
+        ds = ds.assign_coords(lat = ds["tlat"], lon = ds["tlon"])
+    else:
+        raise ValueError("No recognizable lat/lon coords in the GRIB dataset")
+    # 3) Determine area if not provided
+    if area is None:
+        south = float(ds.lat.min())
+        north = float(ds.lat.max())
+        west  = float(ds.lon.min())
+        east  = float(ds.lon.max())
+    else:
+        south, west, north, east = area
     
-    subprocess.run(cmd, shell=True, check=True)
-    print(f"Reprojection done : {output_file}")
+    # 4) Build the target grid
+    lat_out = np.arange(south, north + resolution, resolution)
+    lon_out = np.arange(west,  east  + resolution, resolution)
+    ds_out = xr.Dataset({
+        "lat": (["lat"], lat_out),
+        "lon": (["lon"], lon_out),
+    })
+    # 5) Create (and cache) the regridder
+    regridder = xe.Regridder(
+        ds,
+        ds_out,
+        method=method,
+        periodic=True,
+        filename="icon2latlon_weights.nc",
+    )
+
+    # 6) Apply to **all** data variables
+    ds_regridded = regridder(ds)
+
+    # 7) Save result
+    ds_regridded.to_netcdf(output_file)
     return output_file
 
   def list_metadata(

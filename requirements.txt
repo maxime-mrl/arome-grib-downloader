@@ -1,3 +1,2 @@
-gdal
 h5py
 python-dateutil
