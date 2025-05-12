@@ -40,7 +40,7 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86
 bash /tmp/miniconda.sh -b -p /opt/conda && \
 rm /tmp/miniconda.sh
 # install xaray and cfgrib and xesmf
-RUN conda install -y -c conda-forge xarray cfgrib xesmf and gdal && \
+RUN conda install -y -c conda-forge xarray cfgrib xesmf gdal && \
 conda clean -afy
 
 # Set environment variables for GDAL
