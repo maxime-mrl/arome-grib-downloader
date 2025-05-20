@@ -6,10 +6,12 @@ from osgeo import gdal
 import h5py
 from dateutil import parser
 from universal_downloads import Downloader
-from typing import Optional, List, TypedDict, Sequence
-import numpy as np
+import tempfile
 import xarray as xr
-import xesmf as xe
+import subprocess
+import numpy as np
+import metview as mv
+from typing import Optional, List, TypedDict, Sequence
 
 class BandMetadata(TypedDict):
   element: str
@@ -176,7 +178,7 @@ class GribTools:
     grib_file: str,
     resolution: Optional[float] = 0.1,
     output_file: Optional[str] = None,
-    method: Optional[str] = "bilinear",
+    method: Optional[str] = "remapnn",
     area: Optional[Sequence[float]] = None,
 ) -> str:
     """
@@ -185,61 +187,94 @@ class GribTools:
     :param grib_file:   Path to input GRIB file
     :param resolution:  Target grid spacing in degrees
     :param output_file: Path to output reprojected GRIB file
-    :param method:      Interpolation method
+    :param method:      Interpolation method (remapbil, rempacon2 or remapnn)
     :raises Exception: If input file cannot be read or regridding fails
     :returns:          Path to the reprojected GRIB file
     """
     # Validate input file
     if not os.path.isfile(grib_file):
         raise FileNotFoundError(f"Input file not found: {grib_file}")
-    ds = xr.open_dataset(
-        grib_file,
-        engine="cfgrib",
-        backend_kwargs={"filter_by_keys": {"edition": 2}},
-        decode_cf=False,  # avoid erroneous auto coords
-    )
+    # Check for output path
+    if not output_file:
+      output_file = f"{os.path.splitext(grib_file)[0]}_reprojected.grib2"
+# 1) Read exactly the first GRIB message with Metview
+    src = mv.read(grib_file)
+    first = src[0]
 
-    print(ds.variables)
-    # 2) Ensure we have 'lat'/'lon' coords for xESMF
-    if "latitude" in ds.coords and "longitude" in ds.coords:
-        ds = ds.rename_coords(latitude="lat", longitude="lon")
-    # CLAT/CLON or tlat/tlon are 2D arrays of grid-point centers
-    elif "CLAT" in ds.variables and "CLON" in ds.variables:
-        ds = ds.assign_coords(lat = ds["CLAT"], lon = ds["CLON"])
-    elif "tlat" in ds.variables and "tlon" in ds.variables:
-        ds = ds.assign_coords(lat = ds["tlat"], lon = ds["tlon"])
-    else:
-        raise ValueError("No recognizable lat/lon coords in the GRIB dataset")
-    # 3) Determine area if not provided
-    if area is None:
-        south = float(ds.lat.min())
-        north = float(ds.lat.max())
-        west  = float(ds.lon.min())
-        east  = float(ds.lon.max())
-    else:
-        south, west, north, east = area
+    # 2) Extract cell‐center coords
+    clat = np.array(mv.grib_get_double_array(first, "CLAT"))
+    clon = np.array(mv.grib_get_double_array(first, "CLON"))
+    # 3) Extract cell‐corners (ELAT/ELON) for unstructured grid bounds
+    elat = np.array(mv.grib_get_double_array(first, "ELAT"))
+    elon = np.array(mv.grib_get_double_array(first, "ELON"))
     
-    # 4) Build the target grid
-    lat_out = np.arange(south, north + resolution, resolution)
-    lon_out = np.arange(west,  east  + resolution, resolution)
-    ds_out = xr.Dataset({
-        "lat": (["lat"], lat_out),
-        "lon": (["lon"], lon_out),
-    })
-    # 5) Create (and cache) the regridder
-    regridder = xe.Regridder(
-        ds,
-        ds_out,
-        method=method,
-        periodic=True,
-        filename="icon2latlon_weights.nc",
+    if clat is None or clon is None or elat is None or elon is None:
+      raise RuntimeError("No CLAT/CLON or ELAT/ELON found in the GRIB")
+    
+    ncell = clat.size
+    nv = elat.shape[0]  # number of vertices per cell
+
+    # target domain
+    if area is None:
+      south, west, north, east = -90.0, -180.0,  90.0, 180.0
+    else:
+      south, west, north, east = area
+
+    # grid size
+    nx = int((east  - west)  / resolution) + 1
+    ny = int((north - south) / resolution) + 1
+
+    # unstructured-grid description text (CDO Appendix D.2) :contentReference[oaicite:0]{index=0}
+    grid_txt = [
+      "gridtype = unstructured",
+      f"gridsize = {ncell}",
+      f"nvertex  = {nv}",
+      # flatten CLON/CLAT for xvals/yvals
+      "xvals    = " + " ".join(map(str, clon.flatten())),
+      "yvals    = " + " ".join(map(str, clat.flatten())),
+      # flatten ELON/ELAT for xbounds/ybounds, one cell after another
+      "xbounds  = " + " ".join(map(str, elon.flatten())),
+      "ybounds  = " + " ".join(map(str, elat.flatten())),
+    ]
+    with tempfile.NamedTemporaryFile("w+", suffix=".txt", delete=False) as gf:
+      gf.write("\n".join(grid_txt))
+      gf.flush()
+      src_grid_file = gf.name
+    
+    # temporary CDO grid description file
+    grid_txt = (
+      "gridtype = lonlat\n"
+      f"xsize    = {nx}\n"
+      f"ysize    = {ny}\n"
+      f"xfirst   = {west}\n"
+      f"xinc     = {resolution}\n"
+      f"yfirst   = {south}\n"
+      f"yinc     = {resolution}\n"
     )
+    with tempfile.NamedTemporaryFile("w+", suffix=".txt", delete=False) as gf:
+      gf.write(grid_txt)
+      gf.flush()
+      desc_grib = gf.name
 
-    # 6) Apply to **all** data variables
-    ds_regridded = regridder(ds)
+    # CDO commands
+    # 1. setgrid: set the grid of the input file to the unstructured grid
+    tmp1 = tempfile.NamedTemporaryFile(suffix=".grib2", delete=False).name
+    subprocess.run(
+        ["cdo", f"setgrid,{src_grid_file}", grib_file, tmp1],
+        check=True
+    )
+    # 2. remap: regrid the unstructured grid to the regular lat/lon grid
+    subprocess.run(
+        ["cdo", f"{method},{desc_grib}", tmp1, output_file],
+        check=True
+    )
+    # Cleanup
+    for fn in (src_grid_file, grid_txt, tmp1):
+        try:
+            os.remove(fn)
+        except OSError:
+            pass
 
-    # 7) Save result
-    ds_regridded.to_netcdf(output_file)
     return output_file
 
   def list_metadata(

@@ -125,7 +125,7 @@ def icon_d2_helper( # Not 100% working
     special_urls=[
       'https://opendata.dwd.de/weather/nwp/icon-d2/grib/{run_hour}/{invariant_params}/icon-d2_germany_icosahedral_time-invariant_{run_time}_000_0_{invariant_params}.grib2.bz2'
     ],
-    invariant_params=[ 'clat', 'clon' ],
+    invariant_params=[ 'clat', 'clon', "elat", "elon" ],
     levels=levels,
     steps=steps,
     packages=packages,
