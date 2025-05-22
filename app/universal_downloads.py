@@ -3,6 +3,8 @@ import subprocess
 import datetime
 from itertools import product
 import bz2
+import pygrib
+import hashlib
 from typing import Any, Dict, List, Optional, Union
 
 class Downloader:
@@ -236,47 +238,27 @@ class Downloader:
     - input_files: List of paths to input GRIB files
     - output_file: Path to output combined GRIB file
     """
+    # make sure output dir exist
     out_dir = os.path.dirname(output_file)
     os.makedirs(out_dir, exist_ok=True)
-    # Create a file to store the records
-    records_file = os.path.join(out_dir, "inventory.txt")
   
-    for i, file in enumerate(input_files):
-      print(f"Processing {file} ({i+1}/{len(input_files)})...")
-      if (i == 0):
-        # First file, just copy it
-        subprocess.run(
-          f"cp {file} {output_file}",
-          shell=True,
-          check=True
-        )
-      else:
-        # Subsequent files, append only new records
-        subprocess.run(
-          f"wgrib2 {file} -not_if {records_file} -append -grib {output_file}",
-          shell=True,
-          check=True,
-          stdout=subprocess.DEVNULL
-        )
-      # Update the records file
-      f = open(records_file, "w")
-      f.write("\n".join(self.get_grib_records_signature(output_file)))
-      f.close()
-      # remove the file
-      subprocess.run(
-        f"rm {file}",
-        shell=True,
-        check=True,
-      )
-    # Clean up the records file
-    subprocess.run(
-      f"rm {records_file}",
-      shell=True,
-      check=True,
-    )
-    print(f"Merged file saved as: {output_file}")
-
-
+    # duplicate tracking
+    seen_hashes = set()
+    # create output file
+    with open(output_file, 'wb') as output:
+      # read each grib file with pygrib
+      for grb_file in input_files:
+        print(f"Processing {grb_file}...")
+        for msg in pygrib.open(grb_file):
+          # Serialize the message back to raw GRIB2 bytes
+          raw = msg.tostring()
+          # hash to detect potential duplicates
+          h = hashlib.sha256(raw).hexdigest()
+          if h not in seen_hashes:
+            # save key
+            seen_hashes.add(h)
+            output.write(raw)
+    print("Grib files successfully merged into:", output_file)
 
 # TESTING DA SHIT
 if __name__ == "__main__":

@@ -6,17 +6,27 @@ import os
 
 arome_025 = arome_025_helper(
   steps=[ "00H06H" ],
-  packages=[ "HP1" ],
+  packages=[ "HP1", "HP2" ],
   output_formats=[ "hdf" ],
+)
+
+# arome_025.download_and_process()
+
+arome_025.downloader.merge_datasets(
+  input_files=[
+    "data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-1.grib2",
+    "data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-2.grib2",
+  ],
+  output_file="data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-merged.grib2",
 )
 
 
 
 # arome_025.download_and_process()
-arome_025.grib_to_hdf(
-  "data/out/arome_025/downloads/arome_025_2025-04-28T03:00:00/arome_025_2025-04-28T03:00:00_combined.grib2",
-  "/app/data/out"
-)
+# arome_025.grib_to_hdf(
+#   "data/out/arome_025/downloads/arome_025_2025-04-28T03:00:00/arome_025_2025-04-28T03:00:00_combined.grib2",
+#   "/app/data/out"
+# )
 # print("PRES" in open(os.path.join(os.getcwd(), "data", "metadata_list.txt")).read().split("\n"))
 # with open(os.path.join(os.getcwd(), "data", "metadata_list.txt"), "rw") as f:
 #   print(f.read().split("\n"))
