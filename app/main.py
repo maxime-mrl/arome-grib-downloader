@@ -1,4 +1,4 @@
-from helpers import arome_025_helper
+from helpers import arome_025_helper, aladin_helper
 from universal_downloads import Downloader
 from grib_tools import GribTools
 import os
@@ -12,13 +12,13 @@ arome_025 = arome_025_helper(
 
 # arome_025.download_and_process()
 
-arome_025.downloader.merge_datasets(
-  input_files=[
-    "data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-1.grib2",
-    "data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-2.grib2",
-  ],
-  output_file="data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-merged.grib2",
-)
+# arome_025.downloader.merge_datasets(
+#   input_files=[
+#     "data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-1.grib2",
+#     "data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-2.grib2",
+#   ],
+#   output_file="data/out/arome_025/downloads/arome_025_2025-05-22T03:00:00/hp1-merged.grib2",
+# )
 
 
 
@@ -33,15 +33,32 @@ arome_025.downloader.merge_datasets(
 
 # testing for aladin (not good rn)
 # aladin_downloader = Downloader(
-#     url_template='https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/{run_hour}/ALADLAMB4opendata_2025040500_CLPVEIND_MOD_XFU.grb.bz2',
-#     update_times=[ 0, 6, 12, 18 ],
-#     safe_timeout=4,
-#     date_format="%Y%m%d%H",
-#     invariant_params=[ 'clat', 'clon' ],
-#     levels=[ 1, 2 ], # should be user inputs but yeah..
-#     steps=steps,
-#     packages=packages,
-#   )
+#   url_template='https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/{run_hour}/ALADLAMB4opendata_{run_time}_CLPVEIND_MOD_XFU.grb.bz2{step}{package}',
+#   update_times=[ 0, 6, 12, 18 ],
+#   safe_timeout=4,
+#   date_format="%Y%m%d%H",
+#   steps=[""],
+#   packages=[""],
+# )
+
+# aladin = GribTools(
+#   name='aladin',
+#   downloader=aladin_downloader,
+#   output_dir="/app/data/out/aladin",
+#   output_formats=["cog"],
+#   cog_parameters=["all"],
+#   hdf_parameters=["all"],
+#   levels=["all"],
+# )
+
+# aladin.download_and_process()
+
+aladin = aladin_helper(
+  packages=[ "TEMPERATUR" ],
+  output_formats=[ "hdf" ],
+)
+
+aladin.download_and_process()
 
 # date = "2025-04-17T11_00_00+00_00"
 # date = date.split("_")[0] + "_00Z"

@@ -141,3 +141,54 @@ def icon_d2_helper( # Not 100% working
     resolution=0.025,
   )
   return icon_processor
+
+
+def aladin_helper( # Not final either
+  packages: List[str],
+  output_dir: Optional[str] = None,
+  output_formats: Optional[List[str]] = ["cog", "hdf"],
+  cog_parameters: Optional[List[str]] = ["all"],
+  hdf_parameters: Optional[List[str]] = ["all"],
+  levels: Optional[List[str]] = ["all"],
+) -> GribTools:
+  """
+  helper to use aladin model
+
+  @param steps: list of steps to download
+  @param packages: list of packages to download
+  @param output_dir: output directory for the downloaded files
+  @param output_formats: list of output formats (cog, hdf)
+  @param parameters: list of parameters to download
+  @param levels: list of levels to download
+
+  :raises AssertionError: if steps or packages are not valid
+  
+  :return: GribTools object
+  """
+  
+  for package in packages:
+    assert package in [
+      "GEOPOTENTI", "HUMI_RELAT", "TEMPERATUR", "THETA_P_W", "VITESSE_VE", "WIND_U_COM", "WIND_V_COM", # some packages missing
+    ], f"package {package} not supported, check what's supported on https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/[any_run]" # not all packages follow the same pattern so yeah..
+
+  downloader = Downloader(
+    url_template='https://opendata.chmi.cz/meteorology/weather/nwp_aladin/Lambert_2.3km/{run_hour}/ALADLAMB4opendata_{run_time}_{levels}{package}.grb.bz2{step}',
+    update_times=[ 0, 6, 12, 18 ],
+    safe_timeout=4,
+    levels=["P00000", "P10000"], # should be user inputs but yeah.. -- other levels types: SURF, CLS, CLPsomething, MSL and P...
+    date_format="%Y%m%d%H",
+    steps=[""], # no steps for aladin
+    packages=packages,
+  )
+
+  aladin_processor = GribTools(
+    name='aladin',
+    downloader=downloader,
+    output_dir=output_dir,
+    output_formats=output_formats,
+    cog_parameters=cog_parameters,
+    hdf_parameters=hdf_parameters,
+    levels=levels,
+  )
+  
+  return aladin_processor
