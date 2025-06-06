@@ -75,7 +75,10 @@ class GribTools:
       raise Exception("Downloaded file does not exist")
     print(f"Downloaded file: {file}")
     # check if we need to regrid the file
-    ds = gdal.Open(file)
+    try:
+      ds = gdal.Open(file)
+    except Exception as e:
+      ds = None
     if not ds:
       print("Could not open downloaded file trying to regrid...")
       file = self.regrid(file)
@@ -167,7 +170,7 @@ class GribTools:
   def regrid(
     self,
     grib_file: str,
-    resolution: Optional[float]=0.1,
+    resolution: Optional[float]=None,
     output_file: Optional[str]=None,
   ) -> str:
     """
@@ -185,6 +188,9 @@ class GribTools:
 
     if not output_file:
       output_file = f"{os.path.splitext(grib_file)[0]}_reprojected.grib2"
+      
+    if not resolution:
+      resolution = self.resolution if self.resolution else 0.1  # Default resolution if not provided
     
     lon_points = int(360 / resolution) + 1
     lat_points = int(180 / resolution) + 1
