@@ -3,6 +3,7 @@ from universal_downloads import Downloader
 from grib_tools import GribTools
 import os
 
+# here is me testing some shits enjoy it (or not)
 
 arome_025 = arome_025_helper(
   steps=[ "00H06H" ],

@@ -66,6 +66,7 @@ class Downloader:
     if not list_params:
       return [ {**single_params} ]
 
+    # Generate all combinations of list parameters possible
     parsed_kwargs = []
     keys, values = zip(*list_params.items())  # Extract keys and corresponding list values
     for combination in product(*values):  # Cartesian product of list values
@@ -82,16 +83,16 @@ class Downloader:
     :raises ValueError: If no steps or packages are provided.
     :return: A tuple containing the run time in the specified format and run hour (zero-padded).
     """
-    
+    # get current time then time - safe_timeout hours
     utc_now = datetime.datetime.now(datetime.timezone.utc)
     last_possible_publish = utc_now - datetime.timedelta(hours=self.safe_timeout)
 
-    # Find the latest update time that is less than or equal to last_possible_publish.hour.
+    # Find the latest update time that is less than or equal to last_possible_publish hour
     valid_hours = [hour for hour in self.update_times if hour <= last_possible_publish.hour]
     if not valid_hours:
       raise ValueError("No valid update times available based on the safe_timeout.")
     latest_run_hour = max(valid_hours)
-
+    # format the run time based on the latest run hour
     run_time = datetime.datetime(utc_now.year, utc_now.month, utc_now.day, latest_run_hour)
     formatted_run_time = (
       run_time.isoformat() if self.date_format == "iso" else run_time.strftime(self.date_format)
@@ -152,20 +153,24 @@ class Downloader:
 
     :return: True if it downloaded anything, False otherwise.
     """
+    # Get the latest run time
     run_time, _ = self.get_latest_run()
+    # If output_dir is not provided, use the base_dir or default to ./data/downloads/RUN_{run_time}
     if output_dir is None:
       base_dir = self.base_dir if self.base_dir else os.path.join(os.getcwd(), "data", "downloads")
       output_dir = os.path.join(
         base_dir,
         f"{(self.name if self.name else 'RUN')}_{run_time}"
       )
-
+    # Check if the chosen output directory already exists, if so, if no_exist is True, skip downloading
     if no_exist and os.path.exists(output_dir):
       print(f"Skipping download for {run_time} as directory already exists: {output_dir}")
       return False
     os.makedirs(output_dir, exist_ok=True)
+    # Generate URLs to download
     urls = self.construct_urls()
-
+    # loop and download urls
+    # here could be possible to make parallel downloads to speed things up but soontm
     for url in urls:
       file_name = os.path.basename(url)
       file_path = os.path.join(output_dir, file_name)
@@ -207,28 +212,6 @@ class Downloader:
     print(f"Decompressed and saved: {grib_file_path}")
     return grib_file_path
 
-  def get_grib_records_signature(self, file_path: str) -> set[str]:
-    """
-    Extracts record metadata from a GRIB2 file using wgrib2.
-
-    :param file_path: Path to the GRIB2 file.
-    :return: Set of unique record metadata strings.
-    """
-    result = subprocess.run(
-      ["wgrib2", file_path, "-s"],
-      capture_output=True, 
-      text=True, 
-      check=True
-    )
-    records = set()
-    
-    for line in result.stdout.split("\n"):
-      if line.strip():
-        parts = line.split(":")
-        key = ":".join(parts[2:6])  # Keep variable, level, and time info
-        records.add(key)
-    return records
-
   def merge_datasets(self, input_files: List[str], output_file: str) -> None:
     print("Merging datasets...")
     """
@@ -259,59 +242,3 @@ class Downloader:
             seen_hashes.add(h)
             output.write(raw)
     print("Grib files successfully merged into:", output_file)
-
-# TESTING DA SHIT
-if __name__ == "__main__":
-  arome_downloader = Downloader(
-    url_template='https://object.data.gouv.fr/meteofrance-pnt/pnt/{run_time}Z/arome/0025/{package}/arome__0025__{package}__{step}__{run_time}Z.grib2',
-    update_times=[ 0, 3, 6, 12, 18 ],
-    steps=[ '00H06H', '07H12H' ],
-    packages=[ 'HP1' ],
-    safe_timeout=6,
-    date_format="iso"
-  )
-  icon_downloader = Downloader(
-    url_template='https://opendata.dwd.de/weather/nwp/icon-d2/grib/{run_hour}/{package}/icon-d2_germany_icosahedral_model-level_{run_time}_{step}_{levels}_{package}.grib2.bz2',
-    update_times=[ 0, 3, 6, 9, 12, 15, 18, 21 ],
-    steps=[ "001", "002" ],
-    packages=[ 't' ],
-    safe_timeout=1,
-    date_format="%Y%m%d%H",
-    special_urls=[
-      'https://opendata.dwd.de/weather/nwp/icon-d2/grib/{run_hour}/{invariant_params}/icon-d2_germany_icosahedral_time-invariant_{run_time}_000_0_{invariant_params}.grib2.bz2'
-    ],
-    levels=[ 1, 2 ],
-    invariant_params=[ 'clat', 'clon' ]
-    )
-  arome_urls = arome_downloader.construct_urls()
-  icon_urls = icon_downloader.construct_urls()
-  print(icon_urls)
-  icon_downloader.download()
-  arome_downloader.download()
-
-  # arome_downloader.merge_datasets(
-  #     [
-  #       "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2",
-  #       "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z_c.grib2",
-  #     ],
-  #     "/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome_duplicate_combined.grib2"
-  # )
-
-  
-  # f = open("test2.txt", "w")
-  # f.write("\n".join(arome_downloader.get_grib_records_signature("/workspaces/gdal/app/data/downloads/RUN_2025-03-20T03:00:00/arome__0025__HP1__00H06H__2025-03-20T03:00:00Z.grib2")))
-  # f.close()
-
-
-  # icon_downloader.merge_datasets(
-  #     [
-  #       "/workspaces/gdal/app/data/downloads/RUN_2025032009/file1.grib2",
-  #       "/workspaces/gdal/app/data/downloads/RUN_2025032009/file2.grib2",
-  #       # "/workspaces/gdal/app/data/downloads/RUN_2025032009/icon-d2_germany_icosahedral_model-level_2025032009_001_2_t.grib2",
-  #     ],
-  #     "/workspaces/gdal/app/data/downloads/RUN_2025032009/arome_combined.grib2"
-  # )
-  # for url in arome_urls:
-  #   print(url)
-  # for url in icon_urls:
-  #   print(url)

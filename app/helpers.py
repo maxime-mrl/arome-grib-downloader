@@ -1,3 +1,6 @@
+# helpers are for now just used for testing -- thy're not fully functionnal yet
+# you can use them as a base template to create your own fully functionnal model downloader
+
 from universal_downloads import Downloader
 from grib_tools import GribTools
 from typing import List, Optional
@@ -50,7 +53,6 @@ def arome_025_helper(
     levels=levels,
   )
   return arome_processor
-
 
 def arome_001_helper(
   steps: List[str],

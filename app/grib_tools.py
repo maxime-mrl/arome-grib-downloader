@@ -8,7 +8,6 @@ import h5py
 from dateutil import parser
 from universal_downloads import Downloader
 from typing import Optional, List, TypedDict
-import time
 
 class BandMetadata(TypedDict):
   element: str
@@ -67,16 +66,15 @@ class GribTools:
     """
     Helper function to download and process data automatically
     """
-    start = time.time()
+    # first download the data
     self.downloader.download()
-    # check if downloader has downloaded the file correctly (only one file which exists)
+    # check if downloader has downloaded the file correctly (only one file should exist)
     if len(self.downloader.files) != 1:
       raise Exception("Downloader should output one file")
     file = self.downloader.files[0]
     if not os.path.exists(file):
       raise Exception("Downloaded file does not exist")
     print(f"Downloaded file: {file}")
-    downloading_time = time.time() - start
     # check if we need to regrid the file
     try:
       ds = gdal.Open(file)
@@ -84,23 +82,18 @@ class GribTools:
       ds = None
     if not ds:
       print("Could not open downloaded file trying to regrid...")
+      # regrid
       file = self.regrid(file)
-    # process the downloaded file
-    if ("list" in self.output_formats):
+    # process the downloaded file to the wanted formats
+    if ("list" in self.output_formats): # list are just for debugging (seeing what variables are available)
       self.list_metadata(file)
-    if ("cog" in self.output_formats and "hdf" in self.output_formats):
-      hdfcog_start = time.time()
+    if ("cog" in self.output_formats and "hdf" in self.output_formats): # if both cog and hdf are wanted (as it should be) loop through both at the same time to improve performance
       self.to_cog_and_hdf(file, self.output_dir)
-    elif ("cog" in self.output_formats):
+    elif ("cog" in self.output_formats): # if only cloud optimized geotiff is wanted
       self.grib_to_cog(file, self.output_dir)
-    elif ("hdf" in self.output_formats):
+    elif ("hdf" in self.output_formats): # if only hdf5 is wanted
       self.grib_to_hdf(file, self.output_dir)
-
-    
     print("download and process done")
-    print(f"Total time: {time.time() - start:.2f} seconds")
-    print(f"Downloading time: {downloading_time:.2f} seconds")
-    print(f"Grib to COG/HDF time: {time.time() - hdfcog_start:.2f} seconds")
   
   def get_band_metadata(
     self,
@@ -117,12 +110,12 @@ class GribTools:
       metadata.get('VARIABLE')))    # Generic fallback
     )
     grib_level = (
-      metadata.get('GRIB_SHORT_NAME',
+      metadata.get('GRIB_SHORT_NAME', # same as GRIB_ELEMENT (this = primary choice)
       metadata.get('LEVEL',
       metadata.get('HEIGHT')))
     )
     grib_time = (
-      metadata.get('GRIB_VALID_TIME',  # Primary choice
+      metadata.get('GRIB_VALID_TIME',  # ...
       metadata.get('VALIDTIME',
       metadata.get('TIME')))
     )
@@ -171,7 +164,7 @@ class GribTools:
     if not parameters:
       raise ValueError("No parameters provided for selection")
     # check if the band is wanted
-    if (
+    if ( # "all" means no check
       ("all" not in parameters and name not in parameters) or
       ("all" not in self.levels and level not in self.levels)
     ):
@@ -185,7 +178,7 @@ class GribTools:
     output_file: Optional[str]=None,
   ) -> str:
     """
-    Handle reprojection of specials grids (mainly ICON) to regular latlon grid
+    Handle reprojection of specials grids (mainly ICON models) to regular latlon grid
     @param grib_file: Path to input GRIB file
     @param resolution: Target resolution in degrees (icon-d2 ~ 0.02, icon-eu ~ 0.0625, and icon-global ~ 0.125) default to 0.1
     @param output_file: Path to output reprojected GRIB file
@@ -201,11 +194,20 @@ class GribTools:
       output_file = f"{os.path.splitext(grib_file)[0]}_reprojected.grib2"
 
     if not resolution:
-      resolution = self.resolution if self.resolution else 0.1  # Default resolution if not provided
+      if self.resolution:
+        resolution = self.resolution
+      else:
+        resolution = 0.1  # Default resolution if not provided
+        print("No resolution provided, using default 0.1 degrees -- You should generally set it")
     
     lon_points = int(360 / resolution) + 1
     lat_points = int(180 / resolution) + 1
-
+    # wgrib2 command to reproject the GRIB file
+    # -if ":GEOLAT:" and -if ":GEOLON:" are used to select the latitude and longitude variables and set the center to WMO standard (center 7) and store them as NLAT and ELON respectively
+    # -grid_def is used to define the grid
+    # -s is used to print the grid definition
+    # -not_if "^(1|2):" is used to skip the first two messages (which are usually metadata)
+    # -lola 0:{lon_points}:{resolution} -90:{lat_points}:{resolution} is used to define the grid in latitude and longitude
     cmd = (
       f'wgrib2 {grib_file}'
       f' -if ":GEOLAT:" -set center 7 -set_var NLAT -fi'
@@ -258,10 +260,11 @@ class GribTools:
               output_dir,
               safe_metadata['valid_time'].split(":")[0] + "_00Z"
             )
+            # create time directory if it does not exist
             os.makedirs(time_dir, exist_ok=True)
             output_file = f"{time_dir}/{var_name}_{level}.tif"
             print(f"\nProcessing band {var_name}_{level} at time {safe_metadata['valid_time']}")
-            
+            # gdal translate to cog
             translate_options = gdal.TranslateOptions(
               bandList=[band_idx],
               creationOptions=[
@@ -314,7 +317,6 @@ class GribTools:
           lon_ds = None
     ds = None
     
-
   def list_metadata(
       self,
       input_grib: str,
@@ -364,7 +366,7 @@ class GribTools:
         except Exception as e:
           print(f"Error processing band {band_idx}: {str(e)}")
           continue
-        finally:
+        finally: # clean up
           band = None
           gc.collect()
 
@@ -507,44 +509,3 @@ class GribTools:
           lon_ds = None
     ds = None
   
-
-# TEST
-if __name__ == "__main__":
-  icon_downloader = Downloader(
-    url_template='https://opendata.dwd.de/weather/nwp/icon-d2/grib/{run_hour}/{package}/icon-d2_germany_icosahedral_model-level_{run_time}_{step}_{levels}_{package}.grib2.bz2',
-    update_times=[ 0, 3, 6, 9, 12, 15, 18, 21 ],
-    steps=[ "001", "002" ],
-    packages=[ 't' ],
-    safe_timeout=1,
-    date_format="%Y%m%d%H",
-    special_urls=[
-      'https://opendata.dwd.de/weather/nwp/icon-d2/grib/{run_hour}/{invariant_params}/icon-d2_germany_icosahedral_time-invariant_{run_time}_000_0_{invariant_params}.grib2.bz2'
-    ],
-    levels=[ 1, 2 ],
-    invariant_params=[ 'clat', 'clon' ]
-  )
-  icon = GribTools(
-    name="icon",
-    downloader=icon_downloader,
-    output_formats=[ "cog" ],
-    parameters=[ "TMP" ],
-    levels=[ "2m", "10m" ]
-  )
-  # icon.download_and_process()
-
-  arome_downloader = Downloader(
-    url_template='https://object.data.gouv.fr/meteofrance-pnt/pnt/{run_time}Z/arome/0025/{package}/arome__0025__{package}__{step}__{run_time}Z.grib2',
-    update_times=[ 0, 3, 6, 12, 18 ],
-    steps=[ '00H06H' ],
-    packages=[ 'HP1' ],
-    safe_timeout=6,
-    date_format="iso"
-  )
-  arome = GribTools(
-    name="arome",
-    downloader=arome_downloader,
-    output_formats=[ "cog", "hdf" ],
-    parameters=[ "TMP" ],
-    levels=[ "all" ]
-  )
-  arome.download_and_process()
