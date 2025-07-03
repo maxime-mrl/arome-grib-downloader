@@ -1,4 +1,4 @@
-# helpers are for now just used for testing -- thy're not fully functionnal yet
+# helpers are for now just used for testing -- they're not fully functionnal yet
 # you can use them as a base template to create your own fully functionnal model downloader
 
 from universal_downloads import Downloader
